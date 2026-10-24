@@ -1,0 +1,233 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#f5f8f6">
+  <meta name="description" content="DEBO'S FIT TRACKER — local-first workout and body-weight tracker">
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" href="icons/icon-192.png">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <link rel="stylesheet" href="styles.css">
+  <title>WORKOUT TRACKER</title>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brandmark">DF</div>
+    <div class="brand">
+      <h1>WORKOUT TRACKER</h1>
+      <p>Small steps. Stronger every week.</p>
+    </div>
+    <button id="installBtn" class="ghost hidden" type="button">Install</button>
+  </header>
+
+  <nav class="tabs" aria-label="Main navigation">
+    <button class="tab active" data-view="dashboard">Overview</button>
+    <button class="tab" data-view="workout">Workout</button>
+    <button class="tab" data-view="weight">Weight</button>
+    <button class="tab" data-view="progress">Progress</button>
+    <button class="tab" data-view="backup">Backup</button>
+  </nav>
+
+  <main>
+    <section id="dashboard" class="view active">
+      <div class="welcome">
+        <div>
+          <p class="eyebrow" id="todayLabel">TODAY</p>
+          <h2>Your progress, at a glance.</h2>
+          <p class="muted">Everything stays on this device unless you export it.</p>
+        </div>
+        <div class="streak-icon">✦</div>
+      </div>
+      <div class="stat-grid">
+        <article class="stat-card">
+          <p>Current weight</p><div class="stat-number"><span id="dashWeight">47.0</span><small>kg</small></div>
+          <div class="mini-note">Goal <strong id="dashGoal">52.0 kg</strong></div>
+        </article>
+        <article class="stat-card">
+          <p>Goal progress</p><div class="stat-number"><span id="goalPercent">0</span><small>%</small></div>
+          <div class="progress-track"><div id="goalBar" class="progress-fill"></div></div>
+          <div class="mini-note" id="remainingWeight">5.0 kg to go</div>
+        </article>
+        <article class="stat-card">
+          <p>Workouts logged</p><div class="stat-number"><span id="workoutCount">0</span></div>
+          <div class="mini-note">All-time sessions</div>
+        </article>
+        <article class="stat-card">
+          <p>Personal records</p><div class="stat-number"><span id="prCount">0</span></div>
+          <div class="mini-note">Exercise bests</div>
+        </article>
+      </div>
+      <div class="two-col">
+        <article class="panel">
+          <div class="panel-head"><div><p class="eyebrow">NEXT UP</p><h3 id="todayWorkoutTitle">Plan your workout</h3></div><span class="pill" id="todayWorkoutTag">Flexible</span></div>
+          <p id="todayWorkoutText" class="muted">Choose a session or log a workout whenever your schedule allows.</p>
+          <div class="button-row">
+            <button class="primary" data-go="workout">Log workout</button>
+            <button class="secondary" data-go="weight">Add weight</button>
+          </div>
+        </article>
+        <article class="panel">
+          <div class="panel-head"><div><p class="eyebrow">LATEST CHECK-IN</p><h3>Recovery & ratings</h3></div><span class="round-icon">♡</span></div>
+          <div class="rating-big"><span id="latestRecovery">—</span><small>/ 5</small></div>
+          <p class="muted" id="latestRecoveryText">Add a workout rating to see your latest check-in.</p>
+          <button class="secondary" data-go="workout">Rate a session</button>
+        </article>
+      </div>
+      <article class="panel">
+        <div class="panel-head"><div><p class="eyebrow">BODY WEIGHT</p><h3>Recent trend</h3></div><button class="text-button" data-go="weight">View history →</button></div>
+        <canvas id="dashWeightChart" class="chart" height="190" aria-label="Recent body weight chart"></canvas>
+        <p id="dashChartEmpty" class="empty-hint">Log a few weigh-ins and your trend will appear here.</p>
+      </article>
+      <article class="panel">
+        <div class="panel-head"><div><p class="eyebrow">YOUR PLAN</p><h3>Flexible weekly schedule</h3></div><button class="text-button" data-go="workout">Edit →</button></div>
+        <div id="schedulePreview" class="schedule-grid"></div>
+      </article>
+    </section>
+
+    <section id="workout" class="view">
+      <div class="section-title"><div><p class="eyebrow">TRAINING LOG</p><h2>Workout</h2><p class="muted">Move sessions around whenever life gets in the way.</p></div></div>
+      <div class="two-col">
+        <article class="panel">
+          <h3>Start a session</h3>
+          <form id="sessionForm" class="form-stack">
+            <label>Session name<input id="sessionName" required value="Push Day" maxlength="80"></label>
+            <label>Workout date<input id="sessionDate" type="date" required></label>
+            <div class="button-row"><button class="primary" type="submit">Start session</button><button class="secondary" id="quickPlanBtn" type="button">Use planned workout</button></div>
+          </form>
+          <div id="activeSession" class="active-session hidden"></div>
+        </article>
+        <article class="panel">
+          <h3>Weekly plan</h3>
+          <p class="muted small">Change any day's session. This is a plan, not a restriction.</p>
+          <form id="scheduleForm" class="form-stack">
+            <div id="scheduleEditor"></div>
+            <button class="secondary" type="submit">Save schedule</button>
+          </form>
+        </article>
+      </div>
+      <article class="panel">
+        <div class="panel-head"><div><p class="eyebrow">EXERCISE LIBRARY</p><h3>Add exercises and sets</h3></div><span class="pill" id="activeStatus">No active session</span></div>
+        <form id="addExerciseForm" class="add-exercise-row">
+          <label class="grow">Exercise<input id="exerciseName" list="exerciseSuggestions" placeholder="e.g. Incline DB press" required></label>
+          <datalist id="exerciseSuggestions"></datalist>
+          <label>Bodyweight movement?
+            <select id="bodyweightExercise"><option value="no">No</option><option value="yes">Yes — dips/pull-ups</option></select>
+          </label>
+          <button class="primary" type="submit">Add</button>
+        </form>
+        <div id="exerciseLog" class="exercise-list"><p class="empty-hint">Start a session, then add exercises.</p></div>
+      </article>
+      <article class="panel">
+        <h3>Finish & rate session</h3>
+        <form id="finishForm" class="form-stack">
+          <div class="form-grid">
+            <label>Energy (1–5)<select name="energy"><option>3</option><option>1</option><option>2</option><option>4</option><option>5</option></select></label>
+            <label>Performance (1–5)<select name="performance"><option>3</option><option>1</option><option>2</option><option>4</option><option>5</option></select></label>
+            <label>Form (1–5)<select name="form"><option>3</option><option>1</option><option>2</option><option>4</option><option>5</option></select></label>
+            <label>Recovery (1–5)<select name="recovery"><option>3</option><option>1</option><option>2</option><option>4</option><option>5</option></select></label>
+            <label>Nutrition (1–5)<select name="nutrition"><option>3</option><option>1</option><option>2</option><option>4</option><option>5</option></select></label>
+            <label>Sleep last night (hours)<input name="sleep" type="number" min="0" max="24" step="0.5" placeholder="e.g. 7.5"></label>
+            <label class="span-two">Session notes<textarea name="notes" rows="2" placeholder="How did it feel? What improved?"></textarea></label>
+            <label>Pain location<input name="painLocation" placeholder="None / shoulder / knee…"></label>
+            <label>Pain severity (0–10)<input name="painSeverity" type="number" min="0" max="10" value="0"></label>
+          </div>
+          <button class="primary" type="submit">Finish & save session</button>
+          <p class="muted small">This records the end time and saves your ratings. Stop or modify any exercise that causes pain.</p>
+        </form>
+      </article>
+      <article class="panel">
+        <div class="panel-head"><div><p class="eyebrow">HISTORY</p><h3>Previous sessions</h3></div><span class="pill" id="historyCount">0 sessions</span></div>
+        <div id="sessionHistory"></div>
+      </article>
+    </section>
+
+    <section id="weight" class="view">
+      <div class="section-title"><div><p class="eyebrow">WEIGHT LOG</p><h2>Body weight</h2><p class="muted">Use similar conditions and focus on the trend, not one reading.</p></div></div>
+      <div class="two-col">
+        <article class="panel">
+          <h3>Log a weigh-in</h3>
+          <form id="weightForm" class="form-stack">
+            <label>Weight (kg)<input id="weightValue" type="number" min="20" max="350" step="0.1" value="47" required></label>
+            <label>Date<input id="weightDate" type="date" required></label>
+            <label>Note (optional)<input id="weightNote" placeholder="Morning, before breakfast…"></label>
+            <button class="primary" type="submit">Save weight</button>
+          </form>
+        </article>
+        <article class="panel">
+          <h3>Goal settings</h3>
+          <form id="goalForm" class="form-stack">
+            <label>Starting weight (kg)<input id="startWeight" type="number" min="20" max="350" step="0.1" value="47" required></label>
+            <label>Target weight (kg)<input id="targetWeight" type="number" min="20" max="350" step="0.1" value="52" required></label>
+            <button class="secondary" type="submit">Save goals</button>
+          </form>
+          <p class="muted small">Progress uses your starting weight and target. Adjust these any time.</p>
+        </article>
+      </div>
+      <article class="panel">
+        <div class="panel-head"><div><p class="eyebrow">TREND</p><h3>Weight history</h3></div><span class="pill" id="weightCount">0 entries</span></div>
+        <canvas id="weightChart" class="chart" height="250" aria-label="Body weight history chart"></canvas>
+        <div id="weightHistory" class="table-list"></div>
+      </article>
+    </section>
+
+    <section id="progress" class="view">
+      <div class="section-title"><div><p class="eyebrow">ANALYTICS</p><h2>Progress</h2><p class="muted">Personal records, training trends and monthly photos.</p></div></div>
+      <div class="stat-grid">
+        <article class="stat-card"><p>Total sessions</p><div class="stat-number" id="progressSessions">0</div></article>
+        <article class="stat-card"><p>Sets logged</p><div class="stat-number" id="progressSets">0</div></article>
+        <article class="stat-card"><p>Rated sessions</p><div class="stat-number" id="progressRated">0</div></article>
+        <article class="stat-card"><p>Latest average rating</p><div class="stat-number" id="progressRating">—</div></article>
+      </div>
+      <article class="panel">
+        <div class="panel-head"><div><p class="eyebrow">PROGRESSIVE OVERLOAD</p><h3>Exercise bests</h3></div><span class="pill">Based on logged sets</span></div>
+        <p class="muted small">PRs are calculated from external load for weighted movements. For bodyweight exercises, the tracker also records reps and external load separately; it does not estimate your true total system load.</p>
+        <div id="prList" class="table-list"></div>
+      </article>
+      <article class="panel">
+        <div class="panel-head"><div><p class="eyebrow">MONTHLY CHECK-IN</p><h3>Progress photos</h3></div><span class="pill">Stored locally</span></div>
+        <p class="muted small">Photos can use substantial device storage. Keep a separate backup of originals. Photos are not included in CSV export.</p>
+        <form id="photoForm" class="form-stack">
+          <div class="form-grid">
+            <label>Date<input id="photoDate" type="date" required></label>
+            <label>Photo<input id="photoFile" type="file" accept="image/*" required></label>
+            <label class="span-two">Note<input id="photoNote" placeholder="Month / pose / lighting note"></label>
+          </div>
+          <button class="secondary" type="submit">Save progress photo</button>
+        </form>
+        <div id="photoGallery" class="photo-grid"></div>
+      </article>
+    </section>
+
+    <section id="backup" class="view">
+      <div class="section-title"><div><p class="eyebrow">YOUR DATA</p><h2>Backup & export</h2><p class="muted">Your records are saved locally in this browser on this device.</p></div></div>
+      <article class="panel">
+        <h3>Backup all tracker data</h3>
+        <p class="muted">Export a JSON backup to preserve workouts, weights, schedule, settings, and photos (photos can make the file large). Keep backups somewhere safe.</p>
+        <div class="button-row wrap">
+          <button id="backupBtn" class="primary">Download full JSON backup</button>
+          <button id="csvBtn" class="secondary">Export workout CSV</button>
+          <button id="weightCsvBtn" class="secondary">Export weight CSV</button>
+        </div>
+        <label class="file-drop">Restore from JSON backup<input id="restoreFile" type="file" accept="application/json,.json"></label>
+        <p class="muted small">Restore replaces the data currently in this browser. Export your current data first. The app validates the file before replacing records.</p>
+      </article>
+      <article class="panel">
+        <h3>Storage & privacy</h3>
+        <ul class="plain-list">
+          <li>✓ No account required; no cloud sync built in.</li>
+          <li>✓ Workout and body-weight data stay in browser storage on this device.</li>
+          <li>✓ Progress photos are stored locally when browser storage permits.</li>
+          <li>! Clearing browser/site data can delete records. Export regular backups.</li>
+          <li>! Private browsing and some file:// launch modes may not support reliable offline/PWA behavior.</li>
+        </ul>
+        <div class="button-row"><button id="clearBtn" class="danger">Delete all local data</button></div>
+      </article>
+    </section>
+  </main>
+
+  <footer><span>DEBO'S FIT TRACKER</span><span>Local-first · Made for your progress</span></footer>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <script src="app.js"></script>
+</body>
+</html>
