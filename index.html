@@ -9,13 +9,13 @@
   <link rel="icon" href="icons/icon-192.png">
   <link rel="apple-touch-icon" href="icons/icon-192.png">
   <link rel="stylesheet" href="styles.css">
-  <title>WORKOUT TRACKER</title>
+  <title>DEBO'S FIT TRACKER</title>
 </head>
 <body>
   <header class="topbar">
     <div class="brandmark">DF</div>
     <div class="brand">
-      <h1>WORKOUT TRACKER</h1>
+      <h1>DEBO'S FIT TRACKER</h1>
       <p>Small steps. Stronger every week.</p>
     </div>
     <button id="installBtn" class="ghost hidden" type="button">Install</button>
@@ -26,6 +26,7 @@
     <button class="tab" data-view="workout">Workout</button>
     <button class="tab" data-view="weight">Weight</button>
     <button class="tab" data-view="progress">Progress</button>
+    <button class="tab" data-view="nutrition">Nutrition</button>
     <button class="tab" data-view="backup">Backup</button>
   </nav>
 
@@ -199,6 +200,39 @@
       </article>
     </section>
 
+    <section id="nutrition" class="view">
+      <div class="section-title"><div><p class="eyebrow">FOOD & NUTRITION</p><h2>Nutrition tracker</h2><p class="muted">Search foods or enter a meal in plain language. Review values before logging.</p></div></div>
+      <article class="panel">
+        <div class="panel-head"><div><p class="eyebrow">DAILY INTAKE</p><h3 id="nutritionDateTitle">Today's food diary</h3></div><label style="max-width:170px">Diary date<input id="foodDate" type="date"></label></div>
+        <div class="nutrition-kcal"><div><span class="muted small">Calories eaten</span><div class="nutrition-big"><span id="foodCalories">0</span><small>kcal</small></div></div><div class="nutrition-right"><span class="muted small" id="foodTargetLabel">Target 2300 kcal</span><strong id="foodRemaining">2300 kcal left</strong></div></div>
+        <div class="progress-track nutrition-progress"><div id="foodProgress" class="progress-fill"></div></div>
+        <div class="macro-grid"><div class="macro-card"><span>Protein</span><strong id="foodProtein">0 g</strong><small id="proteinTarget">Target 100 g</small><div class="macro-track"><div id="proteinProgress"></div></div></div><div class="macro-card"><span>Carbs</span><strong id="foodCarbs">0 g</strong><small id="carbsTarget">Target 300 g</small><div class="macro-track"><div id="carbsProgress"></div></div></div><div class="macro-card"><span>Fat</span><strong id="foodFat">0 g</strong><small id="fatTarget">Target 70 g</small><div class="macro-track"><div id="fatProgress"></div></div></div><div class="macro-card"><span>Fibre</span><strong id="foodFibre">0 g</strong><small>Estimated</small><div class="macro-track"><div id="fibreProgress"></div></div></div></div>
+      </article>
+      <div class="two-col">
+        <article class="panel">
+          <h3>Find a food</h3>
+          <form id="foodSearchForm" class="form-stack"><label>Food name<input id="foodSearchQuery" placeholder="e.g. cooked rice, egg, banana" required></label><button class="primary" type="submit">Search foods</button></form>
+          <p class="muted small">Built-in common foods work offline. Packaged-food results may be fetched from Open Food Facts when online. Values are estimates; check product labels when available.</p>
+          <div id="foodSearchResults" class="food-results"><p class="empty-hint">Search to see foods and nutrition values.</p></div>
+        </article>
+        <article class="panel">
+          <h3>Quick add from a sentence</h3>
+          <form id="naturalFoodForm" class="form-stack"><label>Meal input<textarea id="naturalFoodInput" rows="3" placeholder="200g cooked rice, 2 eggs, 10g ghee" required></textarea></label><label>Meal<select id="naturalMeal"><option>Breakfast</option><option>Lunch</option><option>Dinner</option><option>Snack</option><option>Pre-workout</option><option>Post-workout</option></select></label><button class="primary" type="submit">Parse & review foods</button></form>
+          <div id="parsedFoods" class="food-results"></div>
+          <p class="muted small">Review quantities and values before saving. Homemade recipes vary by ingredients and oil.</p>
+        </article>
+      </div>
+      <article class="panel">
+        <div class="panel-head"><div><p class="eyebrow">FOOD DIARY</p><h3>Logged meals</h3></div><span class="pill" id="foodEntryCount">0 items</span></div>
+        <div id="foodDiary" class="table-list"><p class="empty-hint">No foods logged for this date yet.</p></div>
+      </article>
+      <article class="panel">
+        <h3>Nutrition goals</h3>
+        <form id="nutritionGoalsForm" class="form-stack"><div class="form-grid"><label>Goal<select id="nutritionGoal"><option value="gain">Weight gain / muscle building</option><option value="loss">Fat loss</option><option value="maintain">Maintenance</option><option value="custom">Custom targets</option></select></label><label>Daily calories<input id="targetCalories" type="number" min="500" max="10000" value="2300" required></label><label>Protein (g)<input id="targetProtein" type="number" min="0" max="500" value="100" required></label><label>Carbs (g)<input id="targetCarbs" type="number" min="0" max="1000" value="300" required></label><label>Fat (g)<input id="targetFat" type="number" min="0" max="500" value="70" required></label></div><button class="secondary" type="submit">Save nutrition targets</button></form>
+        <p class="muted small">Targets are editable estimates, not medical advice. Choose goals appropriate for your needs.</p>
+      </article>
+    </section>
+
     <section id="backup" class="view">
       <div class="section-title"><div><p class="eyebrow">YOUR DATA</p><h2>Backup & export</h2><p class="muted">Your records are saved locally in this browser on this device.</p></div></div>
       <article class="panel">
@@ -208,6 +242,7 @@
           <button id="backupBtn" class="primary">Download full JSON backup</button>
           <button id="csvBtn" class="secondary">Export workout CSV</button>
           <button id="weightCsvBtn" class="secondary">Export weight CSV</button>
+          <button id="foodCsvBtn" class="secondary">Export food diary CSV</button>
         </div>
         <label class="file-drop">Restore from JSON backup<input id="restoreFile" type="file" accept="application/json,.json"></label>
         <p class="muted small">Restore replaces the data currently in this browser. Export your current data first. The app validates the file before replacing records.</p>
@@ -215,7 +250,8 @@
       <article class="panel">
         <h3>Storage & privacy</h3>
         <ul class="plain-list">
-          <li>✓ No account required; no cloud sync built in.</li>
+          <li>✓ This starter version stores workout, weight and nutrition records locally in this browser.</li>
+          <li>! Cloud sync is not connected yet; we will add secure sign-in and per-user sync in the next step.</li>
           <li>✓ Workout and body-weight data stay in browser storage on this device.</li>
           <li>✓ Progress photos are stored locally when browser storage permits.</li>
           <li>! Clearing browser/site data can delete records. Export regular backups.</li>
@@ -226,7 +262,7 @@
     </section>
   </main>
 
-  <footer><span>DEBO'S FIT TRACKER</span><span>Local-first · Made for your progress</span></footer>
+  <footer><span>DEBO'S FIT TRACKER</span><span>Workout + Nutrition · Local-first starter</span></footer>
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
   <script src="app.js"></script>
 </body>

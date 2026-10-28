@@ -1,48 +1,32 @@
-# DEBO'S FIT TRACKER — PWA
+# WORKOUT TRACKER + NUTRITION — starter v2
 
-A light-theme, local-first workout and body-weight tracker. This is a first usable version, not a native Android widget.
+This is the next version of the existing GitHub Pages PWA. It keeps the original workout/body-weight tracker and adds a food diary.
 
-## Included
-- Body weight log and goal progress (default 47 kg → 52 kg)
-- Flexible editable weekly workout plan
-- Session start/end times and duration
-- Exercises and set-by-set load/reps, including bodyweight exercise flag
-- Session ratings, recovery, sleep, notes, and pain log
-- Basic personal records based on logged sets
-- Weight trend chart
-- Progress photo gallery stored in browser IndexedDB
-- Full JSON backup/restore and workout/weight CSV exports
-- PWA manifest and service worker for offline use when served over HTTPS or localhost
+## Included in this version
+- Food diary by date and meal
+- Daily calorie, protein, carbs, fat and fibre totals
+- Editable targets for weight gain, fat loss, maintenance or custom goals
+- Searchable built-in list of common foods
+- Natural-language entry for supported foods, e.g. `200g cooked rice, 2 eggs, 10g ghee`
+- Optional Open Food Facts search for packaged-food products when online
+- JSON backup/restore includes nutrition entries
+- CSV export for workout, weight and food diary
+- Existing local IndexedDB storage and PWA installation
 
-## Quick launch on Windows 11
+## Important limitations in this starter
+- Cloud sync is not enabled yet. The app continues to save locally on this browser/device. Next implementation step is to create a Supabase project, add authentication and Row Level Security, then wire sync without exposing any secret key.
+- USDA FoodData Central is a good next data source for broader nutrition coverage, but its API key must be kept server-side (not placed in public GitHub Pages JavaScript). For this first pass, built-in generic estimates work offline and Open Food Facts can supply packaged-food results.
+- The sentence parser currently supports common built-in foods and quantity formats such as `200g cooked rice`, `2 eggs`, `10g ghee`. It is not an AI food parser and unknown recipes must be added manually or searched.
+- Nutrition values are estimates. Recipes, oil, serving size, and food preparation can change actual values significantly.
 
-### Easiest way to test locally
-1. Install Python 3 from https://www.python.org/downloads/windows/ if it is not already installed. During setup, enable “Add python.exe to PATH”.
-2. Extract the ZIP to a folder.
-3. Open that folder in File Explorer.
-4. Click the address bar, type `cmd`, and press Enter.
-5. Run:
-   ```bat
-   py -m http.server 8000
-   ```
-6. On the laptop open `http://localhost:8000`.
-7. To test on your phone over the same Wi-Fi, find your laptop's local IPv4 address with `ipconfig`, then open `http://YOUR-LAPTOP-IP:8000` on the phone. Windows Firewall may need a private-network allow rule.
+## Deploy on the existing GitHub Pages site
+1. Download and unzip the project.
+2. Open the existing `workout-tracker` GitHub repository.
+3. Upload/replace the contents of this folder at the repository root (keep `icons/`).
+4. Commit the changes. GitHub Pages will publish the updated app.
+5. On your phone, open the site in Chrome and refresh. If an old version persists, close the installed PWA and clear the site's cached data, then reopen it. The service worker cache was bumped to `debo-fit-v2`.
 
-Note: localhost supports service workers/PWA features in the laptop browser. A phone accessing an ordinary `http://192.168...` address is not a secure context, so install/offline PWA features may not work there.
+Live project from previous setup: https://debojitcpu.github.io/workout-tracker/
 
-### Install as a home-screen PWA
-Host the folder on a static HTTPS host you trust (for example, a static-site host). Open the HTTPS URL in Chrome on the Samsung phone, then use Chrome's menu → “Install app” or “Add to Home screen” if offered. Exact wording varies by browser/version.
-
-## Storage and privacy
-- Structured records are stored in IndexedDB, and photos are stored as blobs in IndexedDB.
-- Data is not synced to a server by this app.
-- Browser/site data clearing can delete records. Export JSON backups regularly.
-- JSON backup may be large if you include many photos. Keep a separate copy of important photos too.
-- CSV exports contain workout sets or weight logs; photos are not in CSV.
-- Restore replaces the current local tracker data after confirmation.
-
-## Honest limitations
-- A PWA home-screen icon is not a live Android home-screen widget.
-- This app has no user account, cloud sync, automatic reminders, or background health integrations.
-- Browser storage limits depend on the device/browser. Backups are essential.
-- This version is a starter tracker; progressive-overload suggestions are simple comparisons, not medical or coaching advice.
+## Planned next step: secure cloud sync
+Use Supabase Auth + a table keyed to the authenticated user, with Row Level Security policies ensuring each user can only read/write their own data. Keep the Supabase anon/publishable key in client configuration only; never put a service-role key or USDA secret key in this repository. We will add this after the first local food diary is confirmed working.

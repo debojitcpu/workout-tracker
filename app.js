@@ -17,13 +17,32 @@ const defaultSchedule = [
   {day:"Monday", session:"Rest"}
 ];
 const defaultState = () => ({
-  version: 1, settings: {startWeight:47,targetWeight:52}, schedule: structuredClone(defaultSchedule),
-  weights: [], sessions: [], photos: [], activeSession: null
+  version: 1, settings: {startWeight:47,targetWeight:52, nutritionGoal:"gain",targetCalories:2300,targetProtein:100,targetCarbs:300,targetFat:70}, schedule: structuredClone(defaultSchedule),
+  weights: [], sessions: [], photos: [], activeSession: null, foodEntries: []
 });
 let state = defaultState();
 let db;
 let deferredInstallPrompt = null;
 let toastTimer;
+let pendingFoods = [];
+const FOOD_DB = [
+ {id:"rice-cooked",name:"Rice, white, cooked",aliases:["rice","cooked rice","white rice","boiled rice"],kcal:130,protein:2.7,carbs:28.2,fat:0.3,fibre:0.4,portion:100},
+ {id:"egg",name:"Egg, whole, cooked",aliases:["egg","eggs","boiled egg","boiled eggs","omelette","omelet"],kcal:155,protein:12.6,carbs:1.1,fat:10.6,fibre:0,portion:50},
+ {id:"ghee",name:"Ghee",aliases:["ghee","clarified butter"],kcal:900,protein:0,carbs:0,fat:100,fibre:0,portion:10},
+ {id:"banana",name:"Banana, raw",aliases:["banana","bananas"],kcal:89,protein:1.1,carbs:22.8,fat:0.3,fibre:2.6,portion:100},
+ {id:"bread",name:"White bread",aliases:["bread","white bread","slice bread"],kcal:266,protein:8.9,carbs:49.4,fat:3.2,fibre:2.7,portion:30},
+ {id:"peanut-butter",name:"Peanut butter",aliases:["peanut butter","pb"],kcal:588,protein:25,carbs:20,fat:50,fibre:6,portion:20},
+ {id:"peanuts",name:"Peanuts",aliases:["peanut","peanuts","groundnut","groundnuts"],kcal:567,protein:25.8,carbs:16.1,fat:49.2,fibre:8.5,portion:25},
+ {id:"chana-boiled",name:"Chickpeas / kala chana, boiled",aliases:["chana","black chana","kala chana","boiled chana","chickpeas","chickpea"],kcal:164,protein:8.9,carbs:27.4,fat:2.6,fibre:7.6,portion:100},
+ {id:"dal",name:"Dal, cooked (generic estimate)",aliases:["dal","daal","lentils","cooked dal","masoor dal","moong dal"],kcal:116,protein:9,carbs:20.1,fat:0.4,fibre:7.9,portion:100},
+ {id:"milk",name:"Milk, whole",aliases:["milk","whole milk","full cream milk"],kcal:61,protein:3.2,carbs:4.8,fat:3.3,fibre:0,portion:100},
+ {id:"oats",name:"Oats, dry",aliases:["oats","oatmeal","dry oats"],kcal:389,protein:16.9,carbs:66.3,fat:6.9,fibre:10.6,portion:40},
+ {id:"paneer",name:"Paneer (generic estimate)",aliases:["paneer","cottage cheese indian"],kcal:265,protein:18.3,carbs:1.2,fat:20.8,fibre:0,portion:100},
+ {id:"roti",name:"Roti / chapati (no added ghee; estimate)",aliases:["roti","chapati","chapatti","phulka"],kcal:297,protein:9.8,carbs:55.7,fat:3.7,fibre:8,portion:40},
+ {id:"potato",name:"Potato, boiled",aliases:["potato","boiled potato","aloo"],kcal:87,protein:1.9,carbs:20.1,fat:0.1,fibre:1.8,portion:100},
+ {id:"chicken",name:"Chicken breast, cooked",aliases:["chicken","chicken breast","cooked chicken"],kcal:165,protein:31,carbs:0,fat:3.6,fibre:0,portion:100},
+ {id:"curd",name:"Plain curd / yogurt (generic estimate)",aliases:["curd","dahi","yogurt","plain yogurt"],kcal:61,protein:3.5,carbs:4.7,fat:3.3,fibre:0,portion:100}
+];
 function openDB() {
   return new Promise((resolve,reject) => {
     const req = indexedDB.open(DB_NAME, DB_VERSION);
@@ -196,8 +215,51 @@ function renderSuggestions() {
   state.sessions.forEach(s=>(s.exercises||[]).forEach(e=>names.add(e.name)));
   $("exerciseSuggestions").innerHTML=[...names].sort().map(n=>`<option value="${esc(n)}"></option>`).join("");
 }
+function foodNutrients(food, grams) {
+  const factor = Number(grams || 0) / 100;
+  return {kcal:Math.round((Number(food.kcal)||0)*factor),protein:+((Number(food.protein)||0)*factor).toFixed(1),carbs:+((Number(food.carbs)||0)*factor).toFixed(1),fat:+((Number(food.fat)||0)*factor).toFixed(1),fibre:+((Number(food.fibre)||0)*factor).toFixed(1)};
+}
+function foodMatches(query) {
+  const q=String(query||"").toLowerCase().trim();
+  return FOOD_DB.filter(f=>f.name.toLowerCase().includes(q)||f.aliases.some(a=>a.includes(q)||q.includes(a))).slice(0,8);
+}
+function renderFoodResults(items, targetId="foodSearchResults") {
+  const el=$(targetId); if(!el)return;
+  if(!items.length){el.innerHTML='<p class="empty-hint">No exact local match. Try a simpler name or search packaged foods online.</p>';return;}
+  el.innerHTML=items.map((f,i)=>`<div class="food-result"><div><strong>${esc(f.name)}</strong><p>Per 100 g · ${Math.round(f.kcal)} kcal · P ${f.protein} g · C ${f.carbs} g · F ${f.fat} g</p></div><button class="secondary" type="button" data-select-food="${esc(f.id)}" data-food-index="${i}">Add</button></div>`).join("");
+}
+function foodById(id){return FOOD_DB.find(f=>f.id===id)||null;}
+function renderPendingFoods(){
+ const el=$("parsedFoods"); if(!pendingFoods.length){el.innerHTML="";return;}
+ el.innerHTML=pendingFoods.map((p,i)=>`<div class="food-result"><div><strong>${esc(p.food.name)}</strong><p>${p.grams} g · about ${foodNutrients(p.food,p.grams).kcal} kcal</p></div><button class="food-delete" type="button" data-remove-pending="${i}">Remove</button></div>`).join("")+`<button class="primary" id="saveParsedFoods" type="button">Add ${pendingFoods.length} item(s) to diary</button>`;
+}
+function parseFoodText(text){
+ const parts=String(text).split(/[,;+\n]+/).map(x=>x.trim()).filter(Boolean), out=[];
+ for(const part of parts){
+  let m=part.match(/^(\d+(?:\.\d+)?)\s*(g|gm|gram|grams|kg)\s+(?:of\s+)?(.+)$/i), grams, name;
+  if(m){grams=Number(m[1])*(/^kg$/i.test(m[2])?1000:1);name=m[3].trim();}
+  else {m=part.match(/^(\d+(?:\.\d+)?)\s+(.+)$/i); if(m){const qty=Number(m[1]);name=m[2].trim();const normalized=name.toLowerCase();const f=FOOD_DB.find(x=>x.aliases.some(a=>a===normalized)||x.name.toLowerCase()===normalized);grams=qty*(f?.portion||100);}else{grams=100;name=part;}}
+  const f=FOOD_DB.find(x=>x.aliases.some(a=>a===name.toLowerCase())||x.name.toLowerCase()===name.toLowerCase())||foodMatches(name)[0];
+  if(f)out.push({food:f,grams:Math.max(1,Math.round(grams))});
+ }
+ return out;
+}
+function renderNutrition(){
+ if(!$('foodDate'))return;
+ const date=$('foodDate').value||today();const entries=(state.foodEntries||[]).filter(x=>x.date===date);
+ const total={kcal:0,protein:0,carbs:0,fat:0,fibre:0};entries.forEach(e=>{const n=foodNutrients(e.food,e.grams);Object.keys(total).forEach(k=>total[k]+=n[k]);});
+ const cfg=state.settings;const targets={kcal:Number(cfg.targetCalories)||2300,protein:Number(cfg.targetProtein)||100,carbs:Number(cfg.targetCarbs)||300,fat:Number(cfg.targetFat)||70};
+ $('nutritionDateTitle').textContent=date===today()?"Today's food diary":`Food diary · ${fmtDate(date)}`;
+ $('foodCalories').textContent=Math.round(total.kcal).toLocaleString();$('foodTargetLabel').textContent=`Target ${targets.kcal} kcal`;$('foodRemaining').textContent=total.kcal>=targets.kcal?`${Math.round(total.kcal-targets.kcal)} kcal over target`:`${Math.round(targets.kcal-total.kcal)} kcal left`;$('foodProgress').style.width=Math.min(100,total.kcal/targets.kcal*100)+"%";
+ [['Protein','protein',targets.protein],['Carbs','carbs',targets.carbs],['Fat','fat',targets.fat]].forEach(([label,key,t])=>{$('food'+label).textContent=total[key].toFixed(1)+' g';$(key+'Target').textContent=`Target ${t} g`;$(key+'Progress').style.width=(t?Math.min(100,total[key]/t*100):0)+'%';});
+ $('foodFibre').textContent=total.fibre.toFixed(1)+' g';$('fibreProgress').style.width=Math.min(100,total.fibre/30*100)+'%';
+ $('foodEntryCount').textContent=`${entries.length} item${entries.length===1?'':'s'}`;
+ const meals=[...new Set(entries.map(e=>e.meal||'Snack'))];
+ $('foodDiary').innerHTML=entries.length?meals.map(meal=>`<div class="food-group-title">${esc(meal)}</div>`+entries.filter(e=>(e.meal||'Snack')===meal).map(e=>{const n=foodNutrients(e.food,e.grams);return `<div class="food-entry"><div><strong>${esc(e.food.name)}</strong><p>${e.grams} g · P ${n.protein} g · C ${n.carbs} g · F ${n.fat} g</p></div><div class="food-entry-right"><strong>${n.kcal} kcal</strong><button class="food-delete" data-delete-food="${esc(e.id)}" type="button">Delete</button></div></div>`}).join('')).join(''):'<p class="empty-hint">No foods logged for this date yet.</p>';
+ $('nutritionGoal').value=cfg.nutritionGoal||'gain';$('targetCalories').value=targets.kcal;$('targetProtein').value=targets.protein;$('targetCarbs').value=targets.carbs;$('targetFat').value=targets.fat;
+}
 function render() {
-  renderDashboard();renderScheduleEditor();renderActiveSession();renderHistory();renderWeight();renderProgress();renderSuggestions();
+  renderDashboard();renderScheduleEditor();renderActiveSession();renderHistory();renderWeight();renderProgress();renderSuggestions();renderNutrition();
 }
 function download(filename,blob) {
   const url=URL.createObjectURL(blob),a=document.createElement("a");a.href=url;a.download=filename;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1500);
@@ -211,6 +273,8 @@ function downloadCSV(type) {
   let rows;
   if(type==="weight") {
     rows=[["date","weight_kg","note"],...state.weights.slice().sort((a,b)=>a.date.localeCompare(b.date)).map(w=>[w.date,w.weight,w.note||""])];
+  } else if(type==="food") {
+    rows=[["date","meal","food","quantity_g","calories_kcal","protein_g","carbs_g","fat_g","fibre_g","source"],...(state.foodEntries||[]).slice().sort((a,b)=>a.date.localeCompare(b.date)).map(e=>{const n=foodNutrients(e.food,e.grams);return [e.date,e.meal,e.food.name,e.grams,n.kcal,n.protein,n.carbs,n.fat,n.fibre,e.food.source||"Built-in estimate"]})];
   } else {
     rows=[["date","session","start_at","end_at","duration_minutes","exercise","bodyweight_movement","set_number","load_kg","reps","rir","completed","energy","performance","form","recovery","nutrition","sleep_hours","notes","pain_location","pain_severity"]];
     state.sessions.forEach(s=>(s.exercises||[]).forEach(e=>(e.sets||[]).forEach((x,i)=>{
@@ -219,25 +283,44 @@ function downloadCSV(type) {
     })));
   }
   const csv="\ufeff"+rows.map(r=>r.map(csvEscape).join(",")).join("\r\n");
-  download(type==="weight"?"debos-weight-log.csv":"debos-workout-log.csv",new Blob([csv],{type:"text/csv;charset=utf-8"}));toast("CSV exported.");
+  download(type==="weight"?"debos-weight-log.csv":type==="food"?"debos-food-diary.csv":"debos-workout-log.csv",new Blob([csv],{type:"text/csv;charset=utf-8"}));toast("CSV exported.");
 }
 function validBackup(obj) {
   return obj && typeof obj==="object" && obj.version===1 && obj.settings && Array.isArray(obj.schedule) && Array.isArray(obj.weights) && Array.isArray(obj.sessions) && Array.isArray(obj.photos);
 }
 function safeRestore(obj) {
   const clean=defaultState();
-  clean.settings={startWeight:Number(obj.settings.startWeight)||47,targetWeight:Number(obj.settings.targetWeight)||52};
+  clean.settings={...clean.settings,...obj.settings,startWeight:Number(obj.settings.startWeight)||47,targetWeight:Number(obj.settings.targetWeight)||52};
   clean.schedule=defaultSchedule.map(d=>({...d,session:String(obj.schedule.find(x=>x.day===d.day)?.session ?? d.session).slice(0,80)}));
   clean.weights=obj.weights.filter(w=>w&&w.date&&Number.isFinite(Number(w.weight))).map(w=>({id:String(w.id||uid()),date:String(w.date),weight:Number(w.weight),note:String(w.note||""),createdAt:Number(w.createdAt)||Date.now()}));
   clean.sessions=obj.sessions.filter(s=>s&&typeof s.name==="string"&&Array.isArray(s.exercises)).map(s=>({...s,id:String(s.id||uid()),exercises:s.exercises.map(e=>({...e,id:String(e.id||uid()),name:String(e.name||"Exercise").slice(0,100),bodyweight:!!e.bodyweight,sets:(Array.isArray(e.sets)?e.sets:[]).map(x=>({weight:Number(x.weight)||0,reps:Number(x.reps)||0,rir:x.rir===""||x.rir==null?"":Number(x.rir),done:!!x.done}))}))}));
   clean.photos=obj.photos.filter(p=>p&&p.id&&p.dataUrl&&p.date).map(p=>({id:String(p.id),date:String(p.date),note:String(p.note||""),dataUrl:String(p.dataUrl)}));
   clean.activeSession=obj.activeSession&&Array.isArray(obj.activeSession.exercises)?obj.activeSession:null;
+  clean.foodEntries=Array.isArray(obj.foodEntries)?obj.foodEntries.filter(x=>x&&x.id&&x.date&&x.food&&Number(x.grams)>0).map(x=>({...x,grams:Number(x.grams),meal:String(x.meal||"Snack")})):[];
   return clean;
 }
 function bindEvents() {
   document.querySelectorAll(".tab").forEach(b=>b.addEventListener("click",()=>setView(b.dataset.view)));
   document.querySelectorAll("[data-go]").forEach(b=>b.addEventListener("click",()=>setView(b.dataset.go)));
-  $("sessionDate").value=today();$("weightDate").value=today();$("photoDate").value=today();
+  $("sessionDate").value=today();$("weightDate").value=today();$("photoDate").value=today();$("foodDate").value=today();
+  $("foodDate").addEventListener("change",renderNutrition);
+  $("foodSearchForm").addEventListener("submit",async e=>{
+    e.preventDefault();const q=$("foodSearchQuery").value.trim();if(!q)return;
+    const local=foodMatches(q);renderFoodResults(local);
+    try{
+      const url="https://world.openfoodfacts.org/cgi/search.pl?search_terms="+encodeURIComponent(q)+"&search_simple=1&action=process&json=1&page_size=8&fields=product_name,brands,nutriments,code";
+      const res=await fetch(url,{headers:{Accept:"application/json"}});if(!res.ok)throw new Error("Search unavailable");const data=await res.json();
+      const remote=(data.products||[]).filter(x=>x.product_name&&x.nutriments&&Number.isFinite(Number(x.nutriments['energy-kcal_100g']??x.nutriments['energy-kcal']))).map((x,i)=>({id:"off-"+(x.code||i),name:x.product_name+(x.brands?" · "+x.brands:""),kcal:Number(x.nutriments['energy-kcal_100g']??x.nutriments['energy-kcal'])||0,protein:Number(x.nutriments.proteins_100g)||0,carbs:Number(x.nutriments.carbohydrates_100g)||0,fat:Number(x.nutriments.fat_100g)||0,fibre:Number(x.nutriments.fiber_100g)||0,portion:100,source:"Open Food Facts"}));
+      if(remote.length)renderFoodResults([...local,...remote].slice(0,12));
+    }catch(err){console.info("External food search unavailable; using offline food list.",err)}
+  });
+  $("foodSearchResults").addEventListener("click",e=>{const b=e.target.closest("[data-select-food]");if(!b)return;const id=b.dataset.selectFood;let food=foodById(id);if(!food){const row=b.closest(".food-result");const name=row?.querySelector("strong")?.textContent||"Food";const txt=row?.querySelector("p")?.textContent||"";const m=txt.match(/([0-9.]+) kcal · P ([0-9.]+) g · C ([0-9.]+) g · F ([0-9.]+) g/);if(m)food={id,name,kcal:Number(m[1]),protein:Number(m[2]),carbs:Number(m[3]),fat:Number(m[4]),fibre:0,portion:100,source:"Open Food Facts"};}
+    if(!food){toast("Could not read that food result.");return;}const grams=prompt(`Quantity in grams for ${food.name}:`,String(food.portion||100));if(grams===null)return;const g=Number(grams);if(!Number.isFinite(g)||g<=0||g>5000){toast("Enter a valid quantity in grams.");return;}const meal=$("naturalMeal").value;state.foodEntries.push({id:uid(),date:$("foodDate").value||today(),meal,food,grams:g,createdAt:Date.now()});saveAndRender("Food added to diary.");
+  });
+  $("naturalFoodForm").addEventListener("submit",e=>{e.preventDefault();pendingFoods=parseFoodText($("naturalFoodInput").value);renderPendingFoods();if(!pendingFoods.length)toast("Couldn't match those foods yet. Try names like rice, egg, ghee, banana, dal or oats.");else toast(`Found ${pendingFoods.length} food item(s). Review before saving.`)});
+  $("parsedFoods").addEventListener("click",e=>{const del=e.target.closest("[data-remove-pending]");if(del){pendingFoods.splice(Number(del.dataset.removePending),1);renderPendingFoods();return;}if(e.target.id==="saveParsedFoods"){const date=$("foodDate").value||today(),meal=$("naturalMeal").value;pendingFoods.forEach(p=>state.foodEntries.push({id:uid(),date,meal,food:p.food,grams:p.grams,createdAt:Date.now()}));const count=pendingFoods.length;pendingFoods=[];$("naturalFoodInput").value="";renderPendingFoods();saveAndRender(`${count} food item(s) added.`)}});
+  $("foodDiary").addEventListener("click",e=>{const b=e.target.closest("[data-delete-food]");if(!b)return;state.foodEntries=state.foodEntries.filter(x=>x.id!==b.dataset.deleteFood);saveAndRender("Food entry deleted.")});
+  $("nutritionGoalsForm").addEventListener("submit",e=>{e.preventDefault();const fd=new FormData(e.currentTarget);const vals={targetCalories:Number(fd.get("targetCalories"))||2300,targetProtein:Number(fd.get("targetProtein"))||0,targetCarbs:Number(fd.get("targetCarbs"))||0,targetFat:Number(fd.get("targetFat"))||0};if(vals.targetCalories<500||vals.targetCalories>10000){toast("Calories target must be between 500 and 10,000.");return;}state.settings={...state.settings,...vals,nutritionGoal:$("nutritionGoal").value};saveAndRender("Nutrition targets saved.")});
   $("sessionForm").addEventListener("submit",e=>{
     e.preventDefault();if(state.activeSession){toast("Finish or discard the active session first.");return}
     const name=$("sessionName").value.trim();if(!name)return;
@@ -292,6 +375,7 @@ function bindEvents() {
   $("backupBtn").addEventListener("click",downloadJSON);
   $("csvBtn").addEventListener("click",()=>downloadCSV("workout"));
   $("weightCsvBtn").addEventListener("click",()=>downloadCSV("weight"));
+  $("foodCsvBtn").addEventListener("click",()=>downloadCSV("food"));
   $("restoreFile").addEventListener("change",async e=>{
     const file=e.target.files[0];if(!file)return;
     try{
@@ -314,7 +398,7 @@ function bindEvents() {
   window.addEventListener("resize",()=>{const sorted=state.weights.slice().sort((a,b)=>a.date.localeCompare(b.date));drawLineChart($("weightChart"),sorted,null);drawLineChart($("dashWeightChart"),sorted.slice(-10),"dashChartEmpty")});
 }
 async function init() {
-  try{db=await openDB();state=await readState();if(!state.version)state=defaultState()}
+  try{db=await openDB();state=await readState();if(!state.version)state=defaultState();state.settings={...defaultState().settings,...(state.settings||{})};if(!Array.isArray(state.foodEntries))state.foodEntries=[]}
   catch(err){console.error(err);alert("Could not open local storage. Try opening this app in a current browser (not private mode).");state=defaultState()}
   bindEvents();
   if("serviceWorker" in navigator && (location.protocol==="https:"||location.hostname==="localhost")) {

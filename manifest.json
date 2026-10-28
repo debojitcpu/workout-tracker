@@ -1,7 +1,7 @@
 {
-  "name": "WORKOUT TRACKER",
-  "short_name": "WORKOUT",
-  "description": "Local-first workout and body-weight tracker",
+  "name": "WORKOUT TRACKER + NUTRITION",
+  "short_name": "Workout+Food",
+  "description": "Workout, body-weight and nutrition tracker",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
